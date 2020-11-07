@@ -12,11 +12,11 @@ import (
 )
 
 type OpCLI struct {
-	loginTime time.Time
-	user      string
-	pass      string
-	session   string
-	vault     string
+	expirationTime   time.Time
+	user             string
+	pass             string
+	session          string
+	keepSessionAlive bool
 }
 
 func NewCli() *OpCLI {
@@ -24,9 +24,12 @@ func NewCli() *OpCLI {
 	return newOpCLi
 }
 
-func (o *OpCLI) SignInWithPresetPass(u, p string) error {
-	o.user = u
-	o.pass = p
+//SignInWithPresetPass if keepSignInSessionAlive = false, the auth session
+//will be invalidated 30 minutes later after you signIn
+func (o *OpCLI) SignInWithPresetPass(username, password string, keepSignInSessionAlive bool) error {
+	o.user = username
+	o.pass = password
+	o.keepSessionAlive = keepSignInSessionAlive
 	err := o.signInExec()
 	if err != nil {
 		return err
@@ -34,8 +37,11 @@ func (o *OpCLI) SignInWithPresetPass(u, p string) error {
 	return nil
 }
 
-func (o *OpCLI) SignIn(u string) error {
-	o.user = u
+//SignIn will request password type in from command line
+//if keepSignInSessionAlive = false, the auth session will be invalidated 30 minutes later after you signIn
+func (o *OpCLI) SignIn(username string, keepSignInSessionAlive bool) error {
+	o.user = username
+	o.keepSessionAlive = keepSignInSessionAlive
 	var oppass string
 	fmt.Print("SignIn by 1password,Please enter master password:")
 	fmt.Scan(&oppass)
@@ -83,7 +89,7 @@ func (o *OpCLI) signInExec() error {
 		log.Fatal(err)
 	}
 	log.Println("SignIn successfully!")
-	o.loginTime = time.Now()
+	o.expirationTime = time.Now().Add(time.Second * 1790)
 	o.session = strings.TrimSpace(string(sOut))
 	return nil
 }
@@ -140,8 +146,14 @@ type ItemField struct {
 	Value       string `json:"value"`
 }
 
+//GetItemFully get an item with all of fields
 func (o *OpCLI) GetItemFully(itemName string) (ItemRes, error) {
 	var getres ItemRes
+	err := o.checkSessionAliveOrSignIn()
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return getres, ferr
+	}
 	var cmdArg []string
 	cmdArg = append(cmdArg, "get", "item", itemName, "--session", o.session)
 	sOut, err := execCommand("op", cmdArg)
@@ -166,6 +178,11 @@ type ItemLitelyRes struct {
 
 func (o *OpCLI) GetUsernameAndPassword(itemName string) (ItemLitelyRes, error) {
 	var getres ItemLitelyRes
+	err := o.checkSessionAliveOrSignIn()
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return getres, ferr
+	}
 	var cmdArg []string
 	cmdArg = append(cmdArg, "get", "item", itemName, "--session", o.session, "--fields", "website,username,password")
 	sOut, err := execCommand("op", cmdArg)
@@ -186,8 +203,13 @@ func (o OpCLI) GetItemWithCustomizedField(itemName string, fieldName ...string) 
 	fieldNameString := strings.Join(fieldName, ",")
 	var cmdArg []string
 	var sOut []byte
+	err := o.checkSessionAliveOrSignIn()
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
 	cmdArg = append(cmdArg, "get", "item", itemName, "--session", o.session, "--fields", fieldNameString)
-	sOut, err := execCommand("op", cmdArg)
+	sOut, err = execCommand("op", cmdArg)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return sOut, ferr
@@ -196,23 +218,20 @@ func (o OpCLI) GetItemWithCustomizedField(itemName string, fieldName ...string) 
 	return sOut, nil
 }
 
-func (o *OpCLI) GetSessionLastTime() (time.Duration, error) {
-	zero := time.Date(0001, 1, 1, 0, 0, 0, 0, time.UTC)
-	if o.loginTime == zero {
-		ferr := fmt.Errorf("Did not login yet")
-		return time.Duration(0), ferr
-	}
-	lastTime := time.Now().Sub(o.loginTime)
-	return lastTime, nil
-}
-
 //if I set set ReadAll(stderr) before ReadAll(stdout) when the stdout
 //output with a big size byte, this will freeze at ReadAll(stderr) ->netPoll:220
+
+//GetListWithFlag you can use like GetListWithFlag([]string{"categories", "tags"}, []string{"Secure Note,Bank Account", "news,finance"})
 func (o OpCLI) GetListWithFlag(flags []string, flagContents []string) ([]ItemRes, error) {
 	var itemList []ItemRes
+	err := o.checkSessionAliveOrSignIn()
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return itemList, ferr
+	}
 	var cmdArg []string
 	cmdArg = append(cmdArg, "list", "items", "--session", o.session)
-	cmdArg, err := o.addFlagsToCmdArg(cmdArg, flags, flagContents)
+	cmdArg, err = o.addFlagsToCmdArg(cmdArg, flags, flagContents)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return itemList, ferr
@@ -292,4 +311,16 @@ func execCommand(name string, arg []string) ([]byte, error) {
 		return sOut, ferr
 	}
 	return sOut, nil
+}
+
+func (o *OpCLI) checkSessionAliveOrSignIn() error {
+	if time.Now().After(o.expirationTime) {
+		if o.keepSessionAlive {
+			log.Println("Session was invalidated, will automatically signIn again")
+			err := o.signInExec()
+			return err
+		}
+		log.Println("Session was invalidated, need manually signIn")
+	}
+	return nil
 }
