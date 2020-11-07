@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+//Op CLI 1Password CLI struct
 type OpCLI struct {
 	expirationTime   time.Time
 	user             string
@@ -19,6 +20,7 @@ type OpCLI struct {
 	keepSessionAlive bool
 }
 
+//NewCli initial a 1Password CLI struct instance
 func NewCli() *OpCLI {
 	newOpCLi := &OpCLI{}
 	return newOpCLi
@@ -94,6 +96,7 @@ func (o *OpCLI) signInExec() error {
 	return nil
 }
 
+//ItemRes 1Password Item with fully fields
 type ItemRes struct {
 	UUID         string      `json:"uuid"`
 	TemplateUUID string      `json:"templateUuid"`
@@ -107,6 +110,8 @@ type ItemRes struct {
 	Details      ItemDetails `json:"details"`
 	Overview     Overv       `json:"overview"`
 }
+
+//Overv ItemRes field
 type Overv struct {
 	URLs          []URL    `json:"URLs"`
 	Ainfo         string   `json:"ainfo"`
@@ -119,11 +124,13 @@ type Overv struct {
 	URL           string   `json:"url"`
 }
 
+//URL ItemRes field
 type URL struct {
 	L string `json:"l"`
 	U string `json:"u"`
 }
 
+//ItemDetails ItemRes field
 type ItemDetails struct {
 	Fields          []ItemField   `json:"fields"`
 	NotesPlain      string        `json:"notesPlain"`
@@ -131,14 +138,17 @@ type ItemDetails struct {
 	Sections        []Section     `json:"sections,omitempty"`
 }
 
+//Section ItemRes field
 type Section struct {
 }
 
+//PasswordHis ItemRes field
 type PasswordHis struct {
 	Time  int64  `json:"time"`
 	Value string `json:"value"`
 }
 
+//ItemField ItemRes field
 type ItemField struct {
 	Designation string `json:"designation"`
 	Name        string `json:"name"`
@@ -170,12 +180,14 @@ func (o *OpCLI) GetItemFully(itemName string) (ItemRes, error) {
 	return getres, nil
 }
 
+//ItemLitelyRes 1Password item struct with simplely 3 fields
 type ItemLitelyRes struct {
 	Website  string `json:"website"`
 	Password string `json:"password"`
 	Username string `json:"username"`
 }
 
+//GetUsernameAndPassword To get item with simplely 3 fields usually we need
 func (o *OpCLI) GetUsernameAndPassword(itemName string) (ItemLitelyRes, error) {
 	var getres ItemLitelyRes
 	err := o.checkSessionAliveOrSignIn()
@@ -199,6 +211,7 @@ func (o *OpCLI) GetUsernameAndPassword(itemName string) (ItemLitelyRes, error) {
 	return getres, nil
 }
 
+//GetItemWithCustomizedField To get a item with the fields you want
 func (o OpCLI) GetItemWithCustomizedField(itemName string, fieldName ...string) ([]byte, error) {
 	fieldNameString := strings.Join(fieldName, ",")
 	var cmdArg []string
