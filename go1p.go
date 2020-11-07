@@ -239,7 +239,7 @@ func (o OpCLI) GetListWithFlag(flags []string, flagContents []string) ([]ItemRes
 
 func (o OpCLI) addFlagsToCmdArg(cmdArg, flags, flagContents []string) ([]string, error) {
 	if len(flags) != len(flagContents) {
-		ferr := fmt.Errorf("length of flags or flagContens parameta should be equal")
+		ferr := fmt.Errorf("length of flags or flagContens parameta MUST be equal")
 		return cmdArg, ferr
 	}
 	var dashedFlags []string
