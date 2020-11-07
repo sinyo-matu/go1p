@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-//Op CLI 1Password CLI struct
+//OpCLI 1Password CLI struct
 type OpCLI struct {
 	expirationTime   time.Time
 	user             string
