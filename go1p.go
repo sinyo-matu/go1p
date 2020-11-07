@@ -16,13 +16,7 @@ type OpCLI struct {
 	user      string
 	pass      string
 	session   string
-}
-
-func testeste() {
-}
-
-func test(t ...int) {
-	fmt.Println(len(t))
+	vault     string
 }
 
 func NewCli() *OpCLI {
@@ -53,7 +47,9 @@ func (o *OpCLI) SignIn(u string) error {
 }
 
 func (o *OpCLI) signInExec() error {
-	cmd := exec.Command("op", "signin", o.user, "--raw")
+	var cmdArg []string
+	cmdArg = []string{"signin", o.user, "--raw"}
+	cmd := exec.Command("op", cmdArg...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
@@ -109,7 +105,7 @@ type Overv struct {
 	URLs          []URL    `json:"URLs"`
 	Ainfo         string   `json:"ainfo"`
 	B5AccountUUID string   `json:"b5AccountUUID"`
-	Pbe           int64    `json:"pbe"`
+	Pbe           float64  `json:"pbe"`
 	Pgrng         bool     `json:"pgrng"`
 	Ps            int64    `json:"ps"`
 	Tags          []string `json:"tags"`
@@ -146,30 +142,12 @@ type ItemField struct {
 
 func (o *OpCLI) GetItemFully(itemName string) (ItemRes, error) {
 	var getres ItemRes
-	cmd := exec.Command("op", "get", "item", itemName, "--session", o.session)
-	stderr, err := cmd.StderrPipe()
+	var cmdArg []string
+	cmdArg = append(cmdArg, "get", "item", itemName, "--session", o.session)
+	sOut, err := execCommand("op", cmdArg)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return getres, ferr
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return getres, ferr
-	}
-	log.Println("Getting", itemName)
-	if err := cmd.Start(); err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return getres, ferr
-	}
-	sErr, _ := ioutil.ReadAll(stderr)
-	sOut, _ := ioutil.ReadAll(stdout)
-	if len(sErr) != 0 {
-		ferr := fmt.Errorf("%s", sErr)
-		return getres, ferr
-	}
-	if err := cmd.Wait(); err != nil {
-		return getres, err
 	}
 	err = json.Unmarshal(sOut, &getres)
 	if err != nil {
@@ -188,30 +166,12 @@ type ItemLitelyRes struct {
 
 func (o *OpCLI) GetUsernameAndPassword(itemName string) (ItemLitelyRes, error) {
 	var getres ItemLitelyRes
-	cmd := exec.Command("op", "get", "item", itemName, "--session", o.session, "--fields", "website,username,password")
-	stderr, err := cmd.StderrPipe()
+	var cmdArg []string
+	cmdArg = append(cmdArg, "get", "item", itemName, "--session", o.session, "--fields", "website,username,password")
+	sOut, err := execCommand("op", cmdArg)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return getres, ferr
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return getres, ferr
-	}
-	log.Println("Getting", itemName)
-	if err := cmd.Start(); err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return getres, ferr
-	}
-	sErr, _ := ioutil.ReadAll(stderr)
-	sOut, _ := ioutil.ReadAll(stdout)
-	if len(sErr) != 0 {
-		ferr := fmt.Errorf("%s", sErr)
-		return getres, ferr
-	}
-	if err := cmd.Wait(); err != nil {
-		return getres, err
 	}
 	err = json.Unmarshal(sOut, &getres)
 	if err != nil {
@@ -220,6 +180,20 @@ func (o *OpCLI) GetUsernameAndPassword(itemName string) (ItemLitelyRes, error) {
 	}
 	log.Println("Got", itemName, "successfully")
 	return getres, nil
+}
+
+func (o OpCLI) GetItemWithCustomizedField(itemName string, fieldName ...string) ([]byte, error) {
+	fieldNameString := strings.Join(fieldName, ",")
+	var cmdArg []string
+	var sOut []byte
+	cmdArg = append(cmdArg, "get", "item", itemName, "--session", o.session, "--fields", fieldNameString)
+	sOut, err := execCommand("op", cmdArg)
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	log.Println("Got", itemName, "successfully")
+	return sOut, nil
 }
 
 func (o *OpCLI) GetSessionLastTime() (time.Duration, error) {
@@ -232,53 +206,90 @@ func (o *OpCLI) GetSessionLastTime() (time.Duration, error) {
 	return lastTime, nil
 }
 
-//this freezed at ioutil.ReadAll(stderr) -> netPoll.go:220
-func (o *OpCLI) GetItemListByCategories(categories ...string) ([]ItemRes, error) {
+//if I set set ReadAll(stderr) before ReadAll(stdout) when the stdout
+//output with a big size byte, this will freeze at ReadAll(stderr) ->netPoll:220
+func (o OpCLI) GetListWithFlag(flags []string, flagContents []string) ([]ItemRes, error) {
 	var itemList []ItemRes
-	commandArg := []string{"list", "items", "--session", o.session}
-	commandArg = append(commandArg, categories...)
-	commandArg = append(commandArg, "|", "op", "get", "item", "-")
-	cmd := exec.Command("op", commandArg...)
-	stderr, err := cmd.StderrPipe()
-	defer stderr.Close()
+	var cmdArg []string
+	cmdArg = append(cmdArg, "list", "items", "--session", o.session)
+	cmdArg, err := o.addFlagsToCmdArg(cmdArg, flags, flagContents)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return itemList, ferr
 	}
-	stdout, err := cmd.StdoutPipe()
-	defer stdout.Close()
+	cmdArg = append(cmdArg, "|", "op", "get", "item", "-")
+	var sOut []byte
+	sOut, err = execCommand("op", cmdArg)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return itemList, ferr
 	}
-	log.Println("Listing items")
-	if err := cmd.Start(); err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return itemList, ferr
-	}
-	sErr, err := ioutil.ReadAll(stderr)
-	if err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return itemList, ferr
-	}
-	sOut, err := ioutil.ReadAll(stdout)
-	if err != nil {
-		ferr := fmt.Errorf("%s", err)
-		return itemList, ferr
-	}
-	if len(sErr) != 0 {
-		ferr := fmt.Errorf("%s", sErr)
-		return itemList, ferr
-	}
-	if err := cmd.Wait(); err != nil {
-		return itemList, err
-	}
-	fmt.Println(string(sOut))
 	err = json.Unmarshal(sOut, &itemList)
 	if err != nil {
 		ferr := fmt.Errorf("%s", err)
 		return itemList, ferr
 	}
+	if len(itemList) == 0 {
+		ferr := fmt.Errorf("No applied flags or flags contents")
+		return itemList, ferr
+	}
 	log.Println("Got", "successfully")
 	return itemList, nil
+}
+
+func (o OpCLI) addFlagsToCmdArg(cmdArg, flags, flagContents []string) ([]string, error) {
+	if len(flags) != len(flagContents) {
+		ferr := fmt.Errorf("length of flags or flagContens parameta should be equal")
+		return cmdArg, ferr
+	}
+	var dashedFlags []string
+	for _, f := range flags {
+		dashedF := "--" + f
+		dashedFlags = append(dashedFlags, dashedF)
+	}
+	for i := 0; i < len(flags); i++ {
+		cmdArg = append(cmdArg, dashedFlags[i])
+		cmdArg = append(cmdArg, flagContents[i])
+	}
+	return cmdArg, nil
+}
+
+func execCommand(name string, arg []string) ([]byte, error) {
+	var sOut, sErr []byte
+	cmd := exec.Command(name, arg...)
+	stderr, err := cmd.StderrPipe()
+	defer stderr.Close()
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	stdout, err := cmd.StdoutPipe()
+	defer stdout.Close()
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	if err := cmd.Start(); err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	sOut, err = ioutil.ReadAll(stdout)
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	sErr, err = ioutil.ReadAll(stderr)
+	if err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	if len(sErr) != 0 {
+		ferr := fmt.Errorf("%s", sErr)
+		return sOut, ferr
+	}
+	if err := cmd.Wait(); err != nil {
+		ferr := fmt.Errorf("%s", err)
+		return sOut, ferr
+	}
+	return sOut, nil
 }

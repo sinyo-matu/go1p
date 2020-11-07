@@ -40,11 +40,20 @@ func TestGetSessionLastTime(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestGetItemListByCategories(t *testing.T) {
+func TestGetItemWithCustomizedFiled(t *testing.T) {
 	cli := NewCli()
 	err := cli.SignInWithPresetPass("my", "")
 	assert.Nil(t, err)
-	result, err := cli.GetItemListByCategories("Identity")
-	fmt.Println(result)
+	result, err := cli.GetItemWithCustomizedField("SBIBank", "username")
+	fmt.Println(string(result))
 	assert.Nil(t, err)
+}
+
+func TestGetListWithFlag(t *testing.T) {
+	cli := NewCli()
+	err := cli.SignInWithPresetPass("my", "")
+	assert.Nil(t, err)
+	result, err := cli.GetListWithFlag([]string{"categories", "tags"}, []string{"Login", "sec"})
+	assert.Nil(t, err)
+	fmt.Println(result)
 }
