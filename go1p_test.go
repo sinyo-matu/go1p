@@ -9,7 +9,14 @@ import (
 
 func TestSignIn(t *testing.T) {
 	cli := NewCli()
-	err := cli.SignInWithPresetPass("my", "", true)
+	err := cli.SignInWithPresetPass("my", "64659027Qy", true)
+	fmt.Println(cli.expirationTime)
+	assert.Nil(t, err)
+}
+
+func TestSignInWithTypeInPass(t *testing.T) {
+	cli := NewCli()
+	err := cli.SignIn("my", false)
 	fmt.Println(cli.expirationTime)
 	assert.Nil(t, err)
 }

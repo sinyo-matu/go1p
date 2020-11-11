@@ -47,6 +47,7 @@ func (o *OpCLI) SignIn(username string, keepSignInSessionAlive bool) error {
 	var oppass string
 	fmt.Print("SignIn by 1password,Please enter master password:")
 	fmt.Scan(&oppass)
+	o.pass = oppass
 	err := o.signInExec()
 	if err != nil {
 		return err
@@ -331,7 +332,10 @@ func (o *OpCLI) checkSessionAliveOrSignIn() error {
 		if o.keepSessionAlive {
 			log.Println("Session was invalidated, will automatically signIn again")
 			err := o.signInExec()
-			return err
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 		log.Println("Session was invalidated, need manually signIn")
 	}
