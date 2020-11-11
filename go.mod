@@ -1,4 +1,4 @@
-module go1p
+module github.com/sinyo-matu/go1p
 
 go 1.15
 
