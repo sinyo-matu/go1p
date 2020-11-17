@@ -341,3 +341,15 @@ func (o *OpCLI) checkSessionAliveOrSignIn() error {
 	}
 	return nil
 }
+
+//GetItemFromChannel a helper func for GetUsernameAndPassword
+func GetItemFromChannel(cli *OpCLI, itemName string) (<-chan ItemLitelyRes, <-chan error) {
+	ch := make(chan ItemLitelyRes)
+	errChan := make(chan error)
+	go func() {
+		result, err := cli.GetUsernameAndPassword(itemName)
+		errChan <- err
+		ch <- result
+	}()
+	return ch, errChan
+}
