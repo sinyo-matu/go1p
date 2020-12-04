@@ -342,14 +342,21 @@ func (o *OpCLI) checkSessionAliveOrSignIn() error {
 	return nil
 }
 
+type GetItemResult struct {
+	Item ItemLitelyRes
+	Err  error
+}
+
 //GetItemFromChannel a helper func for GetUsernameAndPassword
-func GetItemFromChannel(cli *OpCLI, itemName string) (<-chan ItemLitelyRes, <-chan error) {
-	ch := make(chan ItemLitelyRes)
-	errChan := make(chan error)
+func GetItemFromChannel(cli *OpCLI, itemName string) chan GetItemResult {
+	resChan := make(chan GetItemResult)
 	go func() {
-		result, err := cli.GetUsernameAndPassword(itemName)
-		errChan <- err
-		ch <- result
+		item, err := cli.GetUsernameAndPassword(itemName)
+		result := GetItemResult{
+			Item: item,
+			Err:  err,
+		}
+		resChan <- result
 	}()
-	return ch, errChan
+	return resChan
 }
